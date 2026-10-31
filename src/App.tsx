@@ -10,26 +10,40 @@ const initialQuery = `SELECT
 FROM orders 
 LIMIT 10;`;
 
-const sampleRows = [
-  { id: 1, customer_name: "Alice", revenue: 1200 },
-  { id: 2, customer_name: "Bob", revenue: 850 },
-  { id: 3, customer_name: "Charlie", revenue: 1750 },
-  { id: 4, customer_name: "Diana", revenue: 940 },
-];
-
 function App() {
   const [query, setQuery] = useState(initialQuery);
-  const [rows, setRows] = useState<typeof sampleRows>([]);
-  const [status, setStatus] = useState("Ready. Run the example query.");
+  const [rows, setRows] = useState<any[]>([]);
+  const [status, setStatus] = useState("Ready. Run the query to fetch from ClickHouse.");
 
-  function runQuery() {
+  async function runQuery() {
     if (!query.trim()) {
       setStatus("Please enter a SQL query.");
       setRows([]);
       return;
     }
-    setRows(sampleRows);
-    setStatus(`Demo: ${sampleRows.length} rows returned.`);
+
+    setStatus("Executing query...");
+    setRows([]);
+
+    try {
+      const response = await fetch("http://localhost:3000/api/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setStatus(`Error: ${data.error}`);
+        return;
+      }
+
+      setRows(data.rows);
+      setStatus(`Success: ${data.rows.length} rows returned in real-time.`);
+    } catch (error) {
+      setStatus(`Network error: Could not connect to API.`);
+    }
   }
 
   function resetEditor() {
@@ -38,6 +52,9 @@ function App() {
     setStatus("Editor reset.");
   }
 
+  // Extract column names dynamically from the first row of results
+  const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -45,11 +62,11 @@ function App() {
           <Database size={20} />
           MonacoSQL
         </h2>
-        <p className="sidebar-label">EXAMPLE DATABASE</p>
+        <p className="sidebar-label">CLICKHOUSE DATABASE</p>
         <div className="table-name">▾ orders</div>
-        <div className="column-name">id</div>
-        <div className="column-name">customer_name</div>
-        <div className="column-name">revenue</div>
+        <div className="column-name">id (UInt32)</div>
+        <div className="column-name">customer_name (String)</div>
+        <div className="column-name">revenue (Float64)</div>
       </aside>
 
       <main className="workspace">
@@ -94,24 +111,24 @@ function App() {
               <table>
                 <thead>
                   <tr>
-                    <th>ID</th>
-                    <th>Customer Name</th>
-                    <th>Revenue</th>
+                    {columns.map((col) => (
+                      <th key={col}>{col}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id}>
-                      <td>{row.id}</td>
-                      <td>{row.customer_name}</td>
-                      <td>{row.revenue}</td>
+                  {rows.map((row, index) => (
+                    <tr key={index}>
+                      {columns.map((col) => (
+                        <td key={col}>{row[col]}</td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p className="empty-results">Run the example query to see sample data.</p>
+            <p className="empty-results">No results to display.</p>
           )}
         </section>
       </main>
